@@ -29,21 +29,17 @@ def load_trained_model(model_path, tokenizer_path):
 def generate_text(model, tokenizer, prompt, max_new_tokens=200):
     context = torch.tensor([tokenizer.encode(prompt)], dtype=torch.long, device=device)
     generated = model.generate(context, max_new_tokens=max_new_tokens)[0].tolist()
-    full_text = tokenizer.decode(generated)
-    return full_text
+    return tokenizer.decode(generated)
 
 if __name__ == "__main__":
     try:
         model, tokenizer = load_trained_model('model.pth', 'tokenizer.pkl')
         
-        print("-" * 30)
-        print("Generating English text...")
-        print(generate_text(model, tokenizer, "<en> during the debate", 50))
+        print("\n--- Generating English text ---")
+        print(generate_text(model, tokenizer, "<en> during the debate", 100))
         
-        print("\n" + "-" * 30)
-        print("Generating German text...")
-        print(generate_text(model, tokenizer, "<de> während der debatte", 50))
-        print("-" * 30)
+        print("\n--- Generating German text ---")
+        print(generate_text(model, tokenizer, "<de> während der debatte", 100))
         
     except FileNotFoundError:
         print("Model or Tokenizer file not found. Please run train.py first.")
