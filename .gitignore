@@ -1,0 +1,6 @@
+archive/
+__pycache__/
+*.pth
+*.pkl
+output.txt
+.vscode/
