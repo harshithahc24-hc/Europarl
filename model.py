@@ -5,7 +5,15 @@ from torch.nn import functional as F
 # Hyperparameters (can be moved to a config later)
 
 class Head(nn.Module):
-    """ one head of self-attention """
+    """
+    A single head of self-attention.
+    
+    Args:
+        head_size (int): Dimensionality of the query, key, and value vectors.
+        n_embd (int): Dimensionality of the input embeddings.
+        block_size (int): Maximum sequence length (context window).
+        dropout (float): Dropout probability for attention weights.
+    """
     def __init__(self, head_size, n_embd, block_size, dropout=0.1):
         super().__init__()
         self.key = nn.Linear(n_embd, head_size, bias=False)
@@ -15,19 +23,26 @@ class Head(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
+        """
+        Forward pass for a single attention head.
+        
+        Input shape: (Batch, Time, Channels)
+        Output shape: (Batch, Time, Head_Size)
+        """
         B, T, C = x.shape
         k = self.key(x)   # (B, T, head_size)
         q = self.query(x) # (B, T, head_size)
         
         # compute attention scores ("affinities")
-        wei = q @ k.transpose(-2, -1) * (C**-0.5) # (B, T, head_size) @ (B, head_size, T) -> (B, T, T)
+        # scaled dot-product attention
+        wei = q @ k.transpose(-2, -1) * (C**-0.5) 
+        # apply causal mask (prevent looking into the future)
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))
         wei = F.softmax(wei, dim=-1)
         wei = self.dropout(wei)
         
-        # perform the weighted aggregation of the values
-        v = self.value(x) # (B, T, head_size)
-        out = wei @ v    # (B, T, T) @ (B, T, head_size) -> (B, T, head_size)
+        v = self.value(x)
+        out = wei @ v
         return out
 
 class MultiHeadAttention(nn.Module):
@@ -73,6 +88,18 @@ class Block(nn.Module):
         return x
 
 class MultilingualTransformer(nn.Module):
+    """
+    A decoder-only Transformer model designed for multilingual text generation.
+    It takes a sequence of token indices and predicts the next token in the sequence.
+    
+    Args:
+        vocab_size (int): Size of the character vocabulary.
+        n_embd (int): Embedding dimension.
+        n_head (int): Number of attention heads.
+        n_layer (int): Number of Transformer blocks.
+        block_size (int): Maximum context window size.
+        dropout (float): Dropout rate.
+    """
     def __init__(self, vocab_size, n_embd, n_head, n_layer, block_size, dropout=0.1):
         super().__init__()
         self.block_size = block_size
@@ -83,15 +110,28 @@ class MultilingualTransformer(nn.Module):
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
     def forward(self, idx, targets=None):
+        """
+        Forward pass for training or inference.
+        
+        Args:
+            idx (Tensor): (B, T) tensor of token indices.
+            targets (Tensor, optional): (B, T) tensor of target token indices for loss calculation.
+            
+        Returns:
+            logits (Tensor): (B, T, Vocab_Size) raw prediction scores.
+            loss (Tensor, optional): Cross-entropy loss if targets are provided.
+        """
         B, T = idx.shape
-
-        # idx and targets are both (B, T) tensor of integers
         device = idx.device
-        tok_emb = self.token_embedding_table(idx) # (B, T, n_embd)
-        pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T, n_embd)
+        
+        # tok_emb: (B, T, n_embd)
+        tok_emb = self.token_embedding_table(idx) 
+        # pos_emb: (T, n_embd)
+        pos_emb = self.position_embedding_table(torch.arange(T, device=device)) 
+        
         x = tok_emb + pos_emb # (B, T, n_embd)
-        x = self.blocks(x) # (B, T, n_embd)
-        x = self.ln_f(x) # (B, T, n_embd)
+        x = self.blocks(x)    # (B, T, n_embd)
+        x = self.ln_f(x)      # (B, T, n_embd)
         logits = self.lm_head(x) # (B, T, vocab_size)
 
         if targets is None:
@@ -105,6 +145,16 @@ class MultilingualTransformer(nn.Module):
         return logits, loss
 
     def generate(self, idx, max_new_tokens):
+        """
+        Generates new tokens following the provided context.
+        
+        Args:
+            idx (Tensor): (B, T) tensor of starting token indices.
+            max_new_tokens (int): Number of tokens to generate.
+            
+        Returns:
+            Tensor: (B, T + max_new_tokens) indices of the full sequence.
+        """
         # idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens

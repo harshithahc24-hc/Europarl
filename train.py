@@ -42,6 +42,14 @@ def estimate_loss(model, train_data, val_data, batch_size, block_size):
     return out
 
 def train():
+    """
+    Main training pipeline:
+    1. Loads parallel data (DE/EN).
+    2. Cleans and tokenizes text.
+    3. Initializes the MultilingualTransformer.
+    4. Runs the AdamW optimization loop.
+    5. Saves the model weights and tokenizer.
+    """
     # 1. Load and clean data
     base_path = r"c:\Users\manoj\OneDrive\Desktop\Europarl languages\archive"
     de_file = os.path.join(base_path, "europarl-v7.de-en.de")
@@ -57,7 +65,7 @@ def train():
     tokenizer = CharTokenizer(full_text)
     data_tensor = torch.tensor(tokenizer.encode(full_text), dtype=torch.long)
     
-    # Split into train and validation
+    # Split into train (90%) and validation (10%)
     n = int(0.9 * len(data_tensor))
     train_data = data_tensor[:n]
     val_data = data_tensor[n:]
@@ -87,18 +95,18 @@ def train():
             losses = estimate_loss(model, train_data, val_data, batch_size, block_size)
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
-        # sample a batch of data
+        # sample a batch of training data
         xb, yb = get_batch(train_data, batch_size, block_size)
 
-        # evaluate the loss
+        # evaluate the loss and perform backpropagation
         logits, loss = model(xb, yb)
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
-    # Save the model and tokenizer info
+    # 5. Save the model and tokenizer info
     torch.save(model.state_dict(), 'model.pth')
-    # Save tokenizer vocab
+    
     import pickle
     with open('tokenizer.pkl', 'wb') as f:
         pickle.dump(tokenizer, f)
